@@ -1,63 +1,86 @@
+import datetime
+import logging
+import os
 import time
 import threading
+import shutil
 import subprocess
-import os
-from AudioRecorder import AudioRecorder
-from VideoRecorder import VideoRecorder
-from gpiozero import Button
-from signal import pause
+import tempfile
 
-def record_ten_seconds():
-    file_name = time.time()
+from pynput import keyboard
+from audio_recorder import AudioRecorder
+from video_recorder import VideoRecorder
+
+
+logging.basicConfig(
+    format='[%(threadName)s] %(asctime)s: %(message)s',
+    datefmt='%Y/%m/%d %H:%M:%S',
+    level=logging.DEBUG
+)
+log = logging.getLogger()
+
+
+class App:
+    def __init__(self):
+        log.info("booting up..")
+        self.final_dir = self._setup_dirs()
+        self.video_recorder = VideoRecorder(preview=False)
+        self.audio_recorder = AudioRecorder()
+        time.sleep(2)
+        log.info("ready!")
+
+    def _setup_dirs(self):
+        final_dir = os.path.expanduser('~/media/')
+        if(os.path.isdir(final_dir) == False):
+            os.mkdir(final_dir)
+        return final_dir
     
-    start_AVrecording(file_name)
-    time.sleep(10)
-    stop_AVrecording(file_name)
+    def _make_filename(self):
+        return datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    
+    def on_release(self, key):
+        if key == keyboard.Key.enter:
+            if lock.locked():
+                self.stop_recording()
+            else:
+                self.start_recording()
+        if key == keyboard.Key.esc:
+            if lock.locked():
+                self.stop_recording()
+            return False
 
-def start_AVrecording(file_name):
-    print("Starting threads...")
-    video_thread.start(file_name, tmp_dir)
-    audio_thread.start(file_name, tmp_dir)
+    def start_recording(self):
+        lock.acquire()
+        self.tmp_dir = tempfile.mkdtemp()
+        self.file_name = self._make_filename()
+        
+        log.info("starting threads...")   
+        self.video_recorder.start(self.file_name, self.tmp_dir)
+        self.audio_recorder.start(self.file_name, self.tmp_dir)
 
-def stop_AVrecording(file_name):
-    print("Stopping threads...")
-    audio_thread.stop()
-    video_thread.stop()
-
-    print("starting mux...")
-    cmd = "ffmpeg -i {1}/{0}.wav -i {1}/{0}.h264 -c:v copy -c:a aac -strict experimental {2}/{0}.mp4".format(file_name, tmp_dir, final_dir)
-    subprocess.call(cmd, shell=True)
-    print("done")
-
-def main():
-    global video_thread
-    global audio_thread
-    global tmp_dir
-    global final_dir
-
-    # Creates tmp directory if does not exist
-    tmp_dir = os.path.expanduser('~/.tmp_media')
-    if(os.path.isdir(tmp_dir) == False):
-        print("Can't find tmp media directory, creating...")
-        os.mkdir(tmp_dir)
-
-    # Creates final media directory if does not exist
-    final_dir = os.path.expanduser('~/media/')
-    if(os.path.isdir(final_dir) == False):
-        print("Can't find media directory, creating...")
-        os.mkdir(final_dir)
-
-    # Initializes threads
-    video_thread = VideoRecorder()
-    audio_thread = AudioRecorder()
-
-    # Allows time for camera to boot up
-    time.sleep(2)
-
-    button = Button(14)
-    button.when_pressed = record_ten_seconds
-    print("ready for action!")
-    pause()
+    def stop_recording(self, mux=True):
+        log.info("stopping threads...")
+        self.audio_recorder.stop()
+        self.video_recorder.stop()
+        if mux:
+            log.info("starting mux...")
+            cmd = (
+                f"ffmpeg -i {self.tmp_dir}/{self.file_name}.wav -i {self.tmp_dir}/{self.file_name}.h264 "
+                f"-c:v copy -c:a aac -strict experimental {self.final_dir}/{self.file_name}.mp4"
+            )
+            subprocess.run(cmd, capture_output=True, shell=True)
+            log.info(f"{self.file_name}.mp4 is ready!")
+        shutil.rmtree(self.tmp_dir)
+        log.info(f"{self.tmp_dir} removed")
+        lock.release()
+    
+    def run(self):
+        listener = keyboard.Listener(on_release=self.on_release)
+        listener.start()
+        listener.join()
+        
 
 if __name__ == "__main__":
-    main()
+    lock = threading.Lock()
+    app = App()
+    app.run()
