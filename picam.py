@@ -38,12 +38,20 @@ class App:
     def _make_filename(self):
         return datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
     
+    def has_space(self):
+        statvfs = os.statvfs("/")
+        megabytes_available = statvfs.f_frsize * statvfs.f_bavail / 1024 / 1024
+        log.info(f"Still {megabytes_available}MB on device")
+        return megabytes_available > 100
+    
     def on_release(self, key):
         if key == keyboard.Key.enter:
             if lock.locked():
                 self.stop_recording()
-            else:
+            elif self.has_space():
                 self.start_recording()
+            else:
+                return False
         if key == keyboard.Key.esc:
             if lock.locked():
                 self.stop_recording()
