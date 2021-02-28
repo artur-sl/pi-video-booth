@@ -3,7 +3,6 @@ import threading
 import queue
 import sounddevice as sd
 import soundfile as sf
-import os
 
 log = logging.getLogger()
 

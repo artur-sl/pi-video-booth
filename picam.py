@@ -18,6 +18,8 @@ logging.basicConfig(
     level=logging.DEBUG
 )
 log = logging.getLogger()
+MIN_DISK_SPACE_MB = 100
+MAX_VIDEO_LENGTH = 10
 
 
 class App:
@@ -40,25 +42,37 @@ class App:
     
     def has_space(self):
         statvfs = os.statvfs("/")
-        megabytes_available = statvfs.f_frsize * statvfs.f_bavail / 1024 / 1024
-        log.info(f"Still {megabytes_available}MB on device")
-        return megabytes_available > 100
+        megabytes_available = int(statvfs.f_frsize * statvfs.f_bavail / 1024 / 1024)
+        log.info(f"Still {megabytes_available}MB left on device")
+        return megabytes_available > MIN_DISK_SPACE_MB
     
     def on_release(self, key):
         if key == keyboard.Key.enter:
             if lock.locked():
                 self.stop_recording()
             elif self.has_space():
-                self.start_recording()
+                self.start_recording()  
             else:
                 return False
         if key == keyboard.Key.esc:
             if lock.locked():
                 self.stop_recording()
             return False
+    
+    def timer(self, seconds=MAX_VIDEO_LENGTH):
+        log.info(f"going to sleep for {seconds}s and then stop recording")
+        for i in range(seconds):
+            if not lock.locked():
+                log.info("looks like recording has ended before timeout")
+                return
+            time.sleep(1)
+        log.info("time's up!, stopping recording")
+        self.stop_recording()
 
     def start_recording(self):
         lock.acquire()
+        timer_thread = threading.Thread(target=self.timer)
+        timer_thread.start()
         self.tmp_dir = tempfile.mkdtemp()
         self.file_name = self._make_filename()
         

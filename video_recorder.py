@@ -1,10 +1,6 @@
 import threading
 import logging
-import random
 from picamera import PiCamera, Color
-import datetime
-import os
-from time import sleep
 
 log = logging.getLogger()
 
@@ -27,13 +23,10 @@ class VideoRecorder:
     def start(self, file_name, file_dir):
         file_name = f"{file_dir}/{file_name}.h264"
         self.camera.annotate_text = ""
-        video_thread = threading.Thread(target=self.record, args=(file_name,))
+        log.info('starting video recording: %s', file_name)
+        video_thread = threading.Thread(target=self.camera.start_recording, args=(file_name,))
         video_thread.start()
         
     def stop(self):
         self.camera.stop_recording()
         self.camera.annotate_text = ANNOTATION_TEXT
-    
-    def record(self, file_name):
-        log.info('starting video recording: %s', file_name)
-        self.camera.start_recording(file_name)
