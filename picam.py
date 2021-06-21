@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import logging
 import os
@@ -7,7 +8,10 @@ import shutil
 import subprocess
 import tempfile
 
-from pynput import keyboard
+# from pynput import keyboard
+from gpiozero import Button
+from signal import pause
+
 from audio_recorder import AudioRecorder
 from video_recorder import VideoRecorder
 
@@ -23,10 +27,11 @@ MAX_VIDEO_LENGTH = 10
 
 
 class App:
-    def __init__(self):
+    def __init__(self, preview=False, max_video_length=MAX_VIDEO_LENGTH):
         log.info("booting up..")
         self.final_dir = self._setup_dirs()
-        self.video_recorder = VideoRecorder(preview=False)
+        self.max_video_length = max_video_length
+        self.video_recorder = VideoRecorder(preview=preview)
         self.audio_recorder = AudioRecorder()
         time.sleep(2)
         log.info("ready!")
@@ -46,7 +51,7 @@ class App:
         log.info(f"Still {megabytes_available}MB left on device")
         return megabytes_available > MIN_DISK_SPACE_MB
     
-    def on_release(self, key):
+    def on_keyboard_release(self, key):
         if key == keyboard.Key.enter:
             if lock.locked():
                 self.stop_recording()
@@ -71,7 +76,7 @@ class App:
 
     def start_recording(self):
         lock.acquire()
-        timer_thread = threading.Thread(target=self.timer)
+        timer_thread = threading.Thread(target=self.timer, args=(self.max_video_length,))
         timer_thread.start()
         self.tmp_dir = tempfile.mkdtemp()
         self.file_name = self._make_filename()
@@ -97,12 +102,27 @@ class App:
         lock.release()
     
     def run(self):
-        listener = keyboard.Listener(on_release=self.on_release)
-        listener.start()
-        listener.join()
-        
+        def on_release(button):
+            if lock.locked():
+                self.stop_recording()
+            elif self.has_space():
+                self.start_recording()  
+            else:
+                return False
+            
+        button = Button(2)
+        button.when_released = on_release
+        pause()
+        # listener = keyboard.Listener(on_release=self.on_keyboard_release)
+        # listener.start()
+        # listener.join()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Audio&Video recorder")
+    parser.add_argument("--preview", action="store_true")
+    parser.add_argument("--max-video-length", type=int)
+    args = parser.parse_args()
+    
     lock = threading.Lock()
-    app = App()
+    app = App(preview=args.preview, max_video_length=args.max_video_length)
     app.run()

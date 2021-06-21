@@ -1,7 +1,8 @@
+wave
+numpy
+gpiozero
 picamera
 pyaudio
-wave
-gpiozero
+RPi.GPIO
 soundfile
 sounddevice
-numpy

@@ -10,12 +10,12 @@ ANNOTATION_TEXT = "NACISNIJ PRZYCISK ABY NAGRAC ZYCZENIA"
 class VideoRecorder:
     def __init__(self, preview=True):
         self.camera = PiCamera()
-        self.camera.resolution = (640, 480)
+        self.camera.resolution = (1920, 1080)  # (640, 480)
         self.camera.framerate = 25
-        self.camera.rotation = 0 #180
+        self.camera.rotation = 180
         self.camera.annotate_background = Color('red')
         self.camera.annotate_foreground = Color('white')
-        self.camera.annotate_text_size = 30
+        self.camera.annotate_text_size = 70
         self.camera.annotate_text = ANNOTATION_TEXT
         if preview:
             self.camera.start_preview()
