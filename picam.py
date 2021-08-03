@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 
-# from pynput import keyboard
+from pynput import keyboard
 from gpiozero import Button
 from signal import pause
 
@@ -64,22 +64,29 @@ class App:
                 self.stop_recording()
             return False
     
-    def timer(self, seconds=MAX_VIDEO_LENGTH):
+    def timer(self, seconds, current_video):
         log.info(f"going to sleep for {seconds}s and then stop recording")
         for i in range(seconds):
             if not lock.locked():
                 log.info("looks like recording has ended before timeout")
                 return
+            elif current_video != self.file_name:
+                log.info("there is a different ongoing recording")
+                return
             time.sleep(1)
         log.info("time's up!, stopping recording")
         self.stop_recording()
+            
 
     def start_recording(self):
         lock.acquire()
-        timer_thread = threading.Thread(target=self.timer, args=(self.max_video_length,))
+        self.file_name = self._make_filename()
+        timer_thread = threading.Thread(
+            target=self.timer, 
+            args=(self.max_video_length, self.file_name)
+        )
         timer_thread.start()
         self.tmp_dir = tempfile.mkdtemp()
-        self.file_name = self._make_filename()
         
         log.info("starting threads...")   
         self.video_recorder.start(self.file_name, self.tmp_dir)
@@ -87,8 +94,10 @@ class App:
 
     def stop_recording(self, mux=True):
         log.info("stopping threads...")
-        self.audio_recorder.stop()
-        self.video_recorder.stop()
+        if not self.audio_recorder.stop():
+            return
+        if not self.video_recorder.stop():
+            return
         if mux:
             log.info("starting mux...")
             cmd = (
@@ -112,15 +121,15 @@ class App:
             
         button = Button(2)
         button.when_released = on_release
+        listener = keyboard.Listener(on_release=self.on_keyboard_release)
+        listener.start()
         pause()
-        # listener = keyboard.Listener(on_release=self.on_keyboard_release)
-        # listener.start()
         # listener.join()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Audio&Video recorder")
     parser.add_argument("--preview", action="store_true")
-    parser.add_argument("--max-video-length", type=int)
+    parser.add_argument("--max-video-length", type=int, default=MAX_VIDEO_LENGTH)
     args = parser.parse_args()
     
     lock = threading.Lock()

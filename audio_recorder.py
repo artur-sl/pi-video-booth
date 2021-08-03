@@ -32,7 +32,11 @@ class AudioRecorder:
                     file.write(self.q.get())
 
     def stop(self):
-        self.lock.release()
+        if self.lock.locked():
+            self.lock.release()
+            return True
+        else:
+            return False
 
     def start(self, file_name, file_dir):
         self.lock.acquire()
