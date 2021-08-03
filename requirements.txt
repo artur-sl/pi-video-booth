@@ -2,6 +2,7 @@ wave
 numpy
 gpiozero
 picamera
+pillow
 pyaudio
 RPi.GPIO
 soundfile
