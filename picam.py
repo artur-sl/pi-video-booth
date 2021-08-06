@@ -23,7 +23,8 @@ logging.basicConfig(
 )
 log = logging.getLogger()
 MIN_DISK_SPACE_MB = 100
-MAX_VIDEO_LENGTH = 10
+MIN_VIDEO_LENGTH = 5
+MAX_VIDEO_LENGTH = 60
 
 
 class App:
@@ -80,6 +81,7 @@ class App:
 
     def start_recording(self):
         lock.acquire()
+        self.start_datetime = datetime.datetime.now()
         self.file_name = self._make_filename()
         timer_thread = threading.Thread(
             target=self.timer, 
@@ -92,13 +94,15 @@ class App:
         self.video_recorder.start(self.file_name, self.tmp_dir)
         self.audio_recorder.start(self.file_name, self.tmp_dir)
 
-    def stop_recording(self, mux=True):
+    def stop_recording(self):
         log.info("stopping threads...")
         if not self.audio_recorder.stop():
             return
         if not self.video_recorder.stop():
             return
-        if mux:
+        now = datetime.datetime.now()
+        video_length = (now - self.start_datetime).seconds
+        if video_length > MIN_VIDEO_LENGTH:
             log.info("starting mux...")
             cmd = (
                 f"ffmpeg -i {self.tmp_dir}/{self.file_name}.wav -i {self.tmp_dir}/{self.file_name}.h264 "
@@ -106,6 +110,8 @@ class App:
             )
             subprocess.run(cmd, capture_output=True, shell=True)
             log.info(f"{self.file_name}.mp4 is ready!")
+        else:
+            log.info(f"Video was to short: {video_length}, removing it")
         shutil.rmtree(self.tmp_dir)
         log.info(f"{self.tmp_dir} removed")
         lock.release()
